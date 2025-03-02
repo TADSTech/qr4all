@@ -1,13 +1,15 @@
-import 'dart:html' as html;
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart'; // For RenderRepaintBoundary
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
+
+import 'web_utils.dart' if (dart.library.io) 'mobile_utils.dart';
 
 class GenerateQrCode extends StatefulWidget {
   const GenerateQrCode({super.key});
@@ -42,14 +44,9 @@ class _GenerateQrCodeState extends State<GenerateQrCode> {
 
       if (byteData == null) return;
 
-      // For web, use Blob and URL.createObjectURL
-      if (html.window.navigator.userAgent.contains('Web')) {
-        final blob = html.Blob([byteData.buffer.asUint8List()], 'image/png');
-        final url = html.Url.createObjectUrlFromBlob(blob);
-        html.window.open(url, '_blank');
-        html.Url.revokeObjectUrl(url);
+      if (kIsWeb) {
+        await WebUtils.shareQRCodeWeb(byteData.buffer.asUint8List());
       } else {
-        // For mobile, use share_plus
         final directory = await getTemporaryDirectory();
         final file = File('${directory.path}/qr_code.png');
         await file.writeAsBytes(byteData.buffer.asUint8List());
@@ -75,16 +72,9 @@ class _GenerateQrCodeState extends State<GenerateQrCode> {
 
       if (byteData == null) return;
 
-      // For web, use Blob and AnchorElement
-      if (html.window.navigator.userAgent.contains('Web')) {
-        final blob = html.Blob([byteData.buffer.asUint8List()], 'image/png');
-        final url = html.Url.createObjectUrlFromBlob(blob);
-        final anchor = html.AnchorElement(href: url)
-          ..setAttribute('download', 'qr_code_${DateTime.now().millisecondsSinceEpoch}.png')
-          ..click();
-        html.Url.revokeObjectUrl(url);
+      if (kIsWeb) {
+        await WebUtils.downloadQRCodeWeb(byteData.buffer.asUint8List());
       } else {
-        // For mobile, use path_provider
         final directory = await getDownloadsDirectory();
         final file =
             File('${directory?.path}/qr_code_${DateTime.now().millisecondsSinceEpoch}.png');
