@@ -1,0 +1,22 @@
+{
+  "hosting": [
+    {
+      "site": "flutterlenz",
+      "public": "build/old-site",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ]
+    },
+    {
+      "site": "qr4all",
+      "public": "build/web",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ]
+    }
+  ]
+}
