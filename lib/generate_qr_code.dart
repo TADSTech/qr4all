@@ -185,23 +185,32 @@ class _GenerateQrCodeState extends State<GenerateQrCode> {
                           maxLines: 3,
                         ),
                         const SizedBox(height: 20),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             _buildActionButton(
                               icon: Icons.qr_code,
                               label: 'Generate',
                               onPressed: _generateQRCode,
                             ),
+                            SizedBox(
+                              height: 15,
+                            ),
                             _buildActionButton(
                               icon: Icons.share,
                               label: 'Share',
                               onPressed: _shareQRCode,
                             ),
+                            SizedBox(
+                              height: 15,
+                            ),
                             _buildActionButton(
                               icon: Icons.download,
                               label: 'Download',
                               onPressed: _downloadQRCode,
+                            ),
+                            SizedBox(
+                              height: 15,
                             ),
                           ],
                         ),
