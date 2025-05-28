@@ -56,6 +56,8 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isLargeScreen = MediaQuery.of(context).size.width > 600;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('QR4All',
@@ -68,12 +70,49 @@ class _HomePageState extends State<HomePage> {
         backgroundColor: Theme.of(context).colorScheme.primary,
         elevation: 10,
       ),
-      body: SingleChildScrollView(
+      body: Center(
+        child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1200),
+            child:
+                isLargeScreen ? _buildDesktopLayout() : _buildMobileLayout()),
+      ),
+    );
+  }
+
+  Widget _buildMobileLayout() {
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          _buildHeader(),
+          _buildFeatureCards(context),
+          _buildRecentScans(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopLayout() {
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
         child: Column(
           children: [
             _buildHeader(),
-            _buildFeatureCards(context),
-            _buildRecentScans(),
+            const SizedBox(height: 40),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: _buildFeatureCards(context),
+                ),
+                const SizedBox(width: 40),
+                Expanded(
+                  flex: 3,
+                  child: _buildRecentScans(),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -85,7 +124,7 @@ class _HomePageState extends State<HomePage> {
       padding: const EdgeInsets.symmetric(vertical: 40),
       child: Column(
         children: [
-          const Icon(Icons.qr_code_scanner, size: 60, color: Colors.deepPurple),
+          const Icon(Icons.qr_code_scanner, size: 80, color: Colors.deepPurple),
           const SizedBox(height: 20),
           Text(
             'Your QR Code Solution',
@@ -94,21 +133,31 @@ class _HomePageState extends State<HomePage> {
                   fontWeight: FontWeight.bold,
                 ),
           ),
+          const SizedBox(height: 10),
+          Text(
+            'Scan and generate QR codes seamlessly across all your devices',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Colors.grey.shade600,
+                ),
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );
   }
 
   Widget _buildFeatureCards(BuildContext context) {
+    final bool isLargeScreen = MediaQuery.of(context).size.width > 600;
+
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(isLargeScreen ? 0 : 20),
       child: Column(
         children: [
           _buildFeatureCard(
             context,
             icon: Icons.camera_alt,
             title: 'Scan QR Code',
-            subtitle: 'Scan any QR code instantly',
+            subtitle: 'Scan any QR code instantly with your camera',
             color: Colors.purple,
             onTap: () => _navigateTo(context, const ScanQrCode()),
           ),
@@ -117,7 +166,7 @@ class _HomePageState extends State<HomePage> {
             context,
             icon: Icons.create,
             title: 'Generate QR Code',
-            subtitle: 'Create custom QR codes',
+            subtitle: 'Create custom QR codes for URLs, text, and more',
             color: Colors.deepPurple,
             onTap: () => _navigateTo(context, const GenerateQrCode()),
           ),
@@ -127,18 +176,30 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildRecentScans() {
+    final bool isLargeScreen = MediaQuery.of(context).size.width > 600;
+
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(isLargeScreen ? 0 : 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Recent Scans',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  )),
+          Row(
+            children: [
+              Text('Recent Scans',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      )),
+              const Spacer(),
+              if (recentScans.isNotEmpty)
+                TextButton(
+                  onPressed: () => _clearRecentScans(),
+                  child: const Text('Clear All'),
+                ),
+            ],
+          ),
           const SizedBox(height: 10),
           Container(
-            height: 200,
+            height: isLargeScreen ? 300 : 200,
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(10),
@@ -151,17 +212,41 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
             child: recentScans.isEmpty
-                ? const Center(child: Text('No recent scans'))
+                ? Center(
+                    child: Text(
+                      'No recent scans',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            color: Colors.grey.shade600,
+                          ),
+                    ),
+                  )
                 : ListView.builder(
                     itemCount: recentScans.length,
                     itemBuilder: (context, index) {
                       return ListTile(
-                        title: Text(recentScans[index]),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.copy),
-                          onPressed: () {
-                            _copyToClipboard(recentScans[index]);
-                          },
+                        title: Text(
+                          recentScans[index],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.copy, size: 20),
+                              onPressed: () {
+                                _copyToClipboard(recentScans[index]);
+                              },
+                              tooltip: 'Copy to clipboard',
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete, size: 20),
+                              onPressed: () {
+                                _removeScan(index);
+                              },
+                              tooltip: 'Delete scan',
+                            ),
+                          ],
                         ),
                       );
                     },
@@ -180,6 +265,8 @@ class _HomePageState extends State<HomePage> {
     required Color color,
     required VoidCallback onTap,
   }) {
+    final bool isLargeScreen = MediaQuery.of(context).size.width > 600;
+
     return Card(
       elevation: 5,
       shape: RoundedRectangleBorder(
@@ -189,7 +276,7 @@ class _HomePageState extends State<HomePage> {
         borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(isLargeScreen ? 25 : 20),
           child: Row(
             children: [
               Container(
@@ -201,20 +288,24 @@ class _HomePageState extends State<HomePage> {
                 child: Icon(icon, size: 30, color: color),
               ),
               const SizedBox(width: 20),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: color,
-                          )),
-                  Text(subtitle,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Colors.grey.shade600,
-                          )),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: color,
+                            )),
+                    Text(subtitle,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Colors.grey.shade600,
+                            )),
+                  ],
+                ),
               ),
+              if (isLargeScreen)
+                const Icon(Icons.chevron_right, size: 30, color: Colors.grey),
             ],
           ),
         ),
@@ -222,15 +313,37 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _navigateTo(BuildContext context, Widget page) {
-    Navigator.push(context, MaterialPageRoute(builder: (context) => page));
+  void _navigateTo(BuildContext context, Widget page) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => page),
+    );
     _loadRecentScans();
   }
 
   void _copyToClipboard(String text) {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Copied to clipboard!')),
+      const SnackBar(
+        content: Text('Copied to clipboard!'),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
+  }
+
+  Future<void> _removeScan(int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      recentScans.removeAt(index);
+    });
+    await prefs.setStringList('recentScans', recentScans);
+  }
+
+  Future<void> _clearRecentScans() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      recentScans.clear();
+    });
+    await prefs.setStringList('recentScans', recentScans);
   }
 }

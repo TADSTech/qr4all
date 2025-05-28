@@ -1,15 +1,9 @@
-import 'dart:io';
 import 'dart:ui';
-
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart'; // For RenderRepaintBoundary
+import 'package:flutter/rendering.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:share_plus/share_plus.dart';
-
-import 'web_utils.dart' if (dart.library.io) 'mobile_utils.dart';
+import 'package:qr4all/platform_utils.dart';
 
 class GenerateQrCode extends StatefulWidget {
   const GenerateQrCode({super.key});
@@ -20,14 +14,84 @@ class GenerateQrCode extends StatefulWidget {
 
 class _GenerateQrCodeState extends State<GenerateQrCode> {
   final TextEditingController _controller = TextEditingController();
+  final GlobalKey _qrKey = GlobalKey();
   Color _qrColor = Colors.black;
   Color _backgroundColor = Colors.white;
   double _quietZone = 10.0;
   int _errorCorrectionLevel = QrErrorCorrectLevel.L;
-  final GlobalKey _qrKey = GlobalKey();
-  String _selectedDataType = 'Text'; // Default data type
+  String _selectedDataType = 'Text';
+  bool _includeTag = true;
 
-  final List<String> _dataTypes = ['Text', 'URL', 'Email', 'Phone'];
+  final List<Map<String, dynamic>> _dataTypes = [
+    {
+      'name': 'Text',
+      'icon': Icons.text_fields,
+      'hint': 'Enter your text',
+      'validator': (value) => value.isNotEmpty ? null : 'Please enter text',
+    },
+    {
+      'name': 'URL',
+      'icon': Icons.link,
+      'hint': 'Enter URL (https://)',
+      'validator': (value) => value.isNotEmpty ? null : 'Please enter a URL',
+      'formatter': (value) =>
+          value.startsWith('http') ? value : 'https://$value',
+    },
+    {
+      'name': 'Email',
+      'icon': Icons.email,
+      'hint': 'Enter email address',
+      'validator': (value) =>
+          value.contains('@') ? null : 'Please enter a valid email',
+      'formatter': (value) => 'mailto:$value',
+    },
+    {
+      'name': 'Phone',
+      'icon': Icons.phone,
+      'hint': 'Enter phone number',
+      'validator': (value) =>
+          value.isNotEmpty ? null : 'Please enter a phone number',
+      'formatter': (value) => 'tel:$value',
+    },
+    {
+      'name': 'SMS',
+      'icon': Icons.sms,
+      'hint': 'Enter phone number',
+      'validator': (value) =>
+          value.isNotEmpty ? null : 'Please enter a phone number',
+      'formatter': (value) => 'sms:$value',
+    },
+    {
+      'name': 'WiFi',
+      'icon': Icons.wifi,
+      'hint': 'Enter network details',
+      'validator': (value) =>
+          value.isNotEmpty ? null : 'Please enter network details',
+      'formatter': (value) => 'WIFI:T:WPA;S:$value;P:;H:;',
+    },
+    {
+      'name': 'Contact',
+      'icon': Icons.contact_page,
+      'hint': 'Enter contact info',
+      'validator': (value) =>
+          value.isNotEmpty ? null : 'Please enter contact info',
+      'formatter': (value) => 'MECARD:N:$value;TEL:;EMAIL:;ADR:;;',
+    },
+    {
+      'name': 'Location',
+      'icon': Icons.location_on,
+      'hint': 'Enter coordinates (lat,long)',
+      'validator': (value) =>
+          value.contains(',') ? null : 'Please enter coordinates as lat,long',
+      'formatter': (value) => 'geo:$value',
+    },
+  ];
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   void _generateQRCode() => setState(() {});
 
@@ -35,24 +99,17 @@ class _GenerateQrCodeState extends State<GenerateQrCode> {
     if (_controller.text.isEmpty) return;
 
     try {
-      final boundary = _qrKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-
+      final boundary =
+          _qrKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
       if (boundary == null || !boundary.attached) return;
 
       final image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ImageByteFormat.png);
-
       if (byteData == null) return;
 
-      if (kIsWeb) {
-        await WebUtils.shareQRCodeWeb(byteData.buffer.asUint8List());
-      } else {
-        final directory = await getTemporaryDirectory();
-        final file = File('${directory.path}/qr_code.png');
-        await file.writeAsBytes(byteData.buffer.asUint8List());
-        await Share.shareXFiles([XFile(file.path)], text: 'Check out this QR code!');
-      }
+      await PlatformUtils.shareQRCode(byteData.buffer.asUint8List());
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to share QR code: ${e.toString()}')),
       );
@@ -63,27 +120,22 @@ class _GenerateQrCodeState extends State<GenerateQrCode> {
     if (_controller.text.isEmpty) return;
 
     try {
-      final boundary = _qrKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-
+      final boundary =
+          _qrKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
       if (boundary == null || !boundary.attached) return;
 
       final image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ImageByteFormat.png);
-
       if (byteData == null) return;
 
-      if (kIsWeb) {
-        await WebUtils.downloadQRCodeWeb(byteData.buffer.asUint8List());
-      } else {
-        final directory = await getDownloadsDirectory();
-        final file =
-            File('${directory?.path}/qr_code_${DateTime.now().millisecondsSinceEpoch}.png');
-        await file.writeAsBytes(byteData.buffer.asUint8List());
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('QR code saved to ${file.path}')),
-        );
-      }
+      await PlatformUtils.downloadQRCode(byteData.buffer.asUint8List());
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('QR code saved successfully!')),
+      );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to save QR code: ${e.toString()}')),
       );
@@ -91,23 +143,21 @@ class _GenerateQrCodeState extends State<GenerateQrCode> {
   }
 
   String _formatData() {
-    switch (_selectedDataType) {
-      case 'URL':
-        return _controller.text.startsWith('http')
-            ? _controller.text
-            : 'https://${_controller.text}';
-      case 'Email':
-        return 'mailto:${_controller.text}';
-      case 'Phone':
-        return 'tel:${_controller.text}';
-      default:
-        return _controller.text;
-    }
+    final currentType =
+        _dataTypes.firstWhere((type) => type['name'] == _selectedDataType);
+    final formatter = currentType['formatter'] as Function(String)?;
+    final rawText = _controller.text;
+    final formattedText = formatter != null ? formatter(rawText) : rawText;
+
+    return _includeTag
+        ? 'QR4ALL:${currentType['name']}:$formattedText'
+        : formattedText;
   }
 
   @override
   Widget build(BuildContext context) {
-    final isLargeScreen = MediaQuery.of(context).size.width > 600;
+    final isLargeScreen = MediaQuery.of(context).size.width > 800;
+    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -118,99 +168,120 @@ class _GenerateQrCodeState extends State<GenerateQrCode> {
               fontWeight: FontWeight.bold,
             )),
         centerTitle: true,
-        backgroundColor: Theme.of(context).colorScheme.primary,
+        backgroundColor: theme.colorScheme.primary,
         elevation: 8,
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(isLargeScreen ? 32.0 : 16.0),
+        padding: EdgeInsets.all(isLargeScreen ? 24.0 : 16.0),
         child: Center(
           child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: 800),
+            constraints: const BoxConstraints(maxWidth: 1000),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Data Type Selection
+                // Data Type Selection Card
                 Card(
                   elevation: 8,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
                   child: Padding(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(16.0),
                     child: Column(
                       children: [
                         Text('Select Data Type',
-                            style: TextStyle(
-                              fontSize: 18,
+                            style: theme.textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.bold,
                             )),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 12),
                         Wrap(
-                          spacing: 10,
+                          spacing: 8,
+                          runSpacing: 8,
                           children: _dataTypes.map((type) {
-                            return ChoiceChip(
-                              label: Text(type),
-                              selected: _selectedDataType == type,
+                            return FilterChip(
+                              label: Text(type['name']),
+                              avatar: Icon(type['icon'], size: 20),
+                              selected: _selectedDataType == type['name'],
                               onSelected: (selected) {
                                 setState(() {
-                                  _selectedDataType = type;
+                                  _selectedDataType = type['name'];
+                                  _controller.text = '';
                                 });
                               },
+                              showCheckmark: false,
+                              labelStyle: TextStyle(
+                                color: _selectedDataType == type['name']
+                                    ? theme.colorScheme.onPrimary
+                                    : null,
+                              ),
+                              selectedColor: theme.colorScheme.primary,
                             );
                           }).toList(),
+                        ),
+                        const SizedBox(height: 12),
+                        SwitchListTile(
+                          title: const Text('Include App Tag'),
+                          subtitle: const Text(
+                              'Adds QR4ALL tag for better scanning in our app'),
+                          value: _includeTag,
+                          onChanged: (value) =>
+                              setState(() => _includeTag = value),
+                          contentPadding: EdgeInsets.zero,
                         ),
                       ],
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 20),
 
                 // Input Section
                 Card(
                   elevation: 8,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
                   child: Padding(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(16.0),
                     child: Column(
                       children: [
-                        TextField(
+                        TextFormField(
                           controller: _controller,
                           decoration: InputDecoration(
-                            labelText: 'Enter $_selectedDataType',
-                            border: OutlineInputBorder(),
+                            labelText: _dataTypes.firstWhere((type) =>
+                                type['name'] == _selectedDataType)['hint'],
+                            border: const OutlineInputBorder(),
                             suffixIcon: IconButton(
-                              icon: Icon(Icons.clear),
+                              icon: const Icon(Icons.clear),
                               onPressed: () => _controller.clear(),
                             ),
+                            prefixIcon: Icon(_dataTypes.firstWhere((type) =>
+                                type['name'] == _selectedDataType)['icon']),
                           ),
-                          maxLines: 3,
+                          maxLines: _selectedDataType == 'Text' ? 3 : 1,
+                          validator: _dataTypes.firstWhere((type) =>
+                              type['name'] == _selectedDataType)['validator'],
+                          onChanged: (value) => setState(() {}),
                         ),
-                        const SizedBox(height: 20),
-                        Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        const SizedBox(height: 16),
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 12,
+                          runSpacing: 12,
                           children: [
                             _buildActionButton(
                               icon: Icons.qr_code,
                               label: 'Generate',
                               onPressed: _generateQRCode,
-                            ),
-                            SizedBox(
-                              height: 15,
+                              enabled: _controller.text.isNotEmpty,
                             ),
                             _buildActionButton(
                               icon: Icons.share,
                               label: 'Share',
                               onPressed: _shareQRCode,
-                            ),
-                            SizedBox(
-                              height: 15,
+                              enabled: _controller.text.isNotEmpty,
                             ),
                             _buildActionButton(
                               icon: Icons.download,
                               label: 'Download',
                               onPressed: _downloadQRCode,
-                            ),
-                            SizedBox(
-                              height: 15,
+                              enabled: _controller.text.isNotEmpty,
                             ),
                           ],
                         ),
@@ -218,34 +289,49 @@ class _GenerateQrCodeState extends State<GenerateQrCode> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 20),
 
                 // QR Code Display Section
                 if (_controller.text.isNotEmpty)
                   Card(
                     elevation: 8,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
                     child: Padding(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(16.0),
                       child: Column(
                         children: [
+                          Text('Your QR Code',
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              )),
+                          const SizedBox(height: 16),
                           RepaintBoundary(
                             key: _qrKey,
-                            child: QrImageView(
-                              data: _formatData(),
-                              version: QrVersions.auto,
-                              size: isLargeScreen ? 300 : 200,
-                              backgroundColor: _backgroundColor,
-                              foregroundColor: _qrColor,
-                              gapless: false,
-                              padding: EdgeInsets.all(_quietZone),
-                              errorCorrectionLevel: _errorCorrectionLevel,
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: theme.dividerColor,
+                                  width: 1,
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: QrImageView(
+                                data: _formatData(),
+                                version: QrVersions.auto,
+                                size: isLargeScreen ? 280 : 200,
+                                backgroundColor: _backgroundColor,
+                                foregroundColor: _qrColor,
+                                gapless: false,
+                                padding: EdgeInsets.all(_quietZone),
+                                errorCorrectionLevel: _errorCorrectionLevel,
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
                           _buildColorPickerSection(),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
                           _buildAdvancedSettingsSection(),
                         ],
                       ),
@@ -263,32 +349,47 @@ class _GenerateQrCodeState extends State<GenerateQrCode> {
     required IconData icon,
     required String label,
     required VoidCallback onPressed,
+    required bool enabled,
   }) {
     return ElevatedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 24),
-      label: Text(label, style: TextStyle(fontSize: 16)),
+      onPressed: enabled ? onPressed : null,
+      icon: Icon(icon, size: 20),
+      label: Text(label),
       style: ElevatedButton.styleFrom(
-        minimumSize: Size(150, 50),
-        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-        foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+        minimumSize: const Size(120, 48),
+        backgroundColor: enabled
+            ? Theme.of(context).colorScheme.primary
+            : Theme.of(context).disabledColor,
+        foregroundColor: enabled
+            ? Theme.of(context).colorScheme.onPrimary
+            : Theme.of(context).colorScheme.onSurface,
       ),
     );
   }
 
   Widget _buildColorPickerSection() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    return Column(
       children: [
-        _buildColorPickerButton(
-          label: 'QR Color',
-          color: _qrColor,
-          onColorChanged: (color) => setState(() => _qrColor = color),
-        ),
-        _buildColorPickerButton(
-          label: 'Background',
-          color: _backgroundColor,
-          onColorChanged: (color) => setState(() => _backgroundColor = color),
+        Text('Customization',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                )),
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _buildColorPickerButton(
+              label: 'QR Color',
+              color: _qrColor,
+              onColorChanged: (color) => setState(() => _qrColor = color),
+            ),
+            _buildColorPickerButton(
+              label: 'Background',
+              color: _backgroundColor,
+              onColorChanged: (color) =>
+                  setState(() => _backgroundColor = color),
+            ),
+          ],
         ),
       ],
     );
@@ -298,11 +399,10 @@ class _GenerateQrCodeState extends State<GenerateQrCode> {
     return Column(
       children: [
         Text('Advanced Settings',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            )),
-        const SizedBox(height: 10),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                )),
+        const SizedBox(height: 12),
         _buildSlider(
           label: 'Quiet Zone',
           value: _quietZone,
@@ -316,23 +416,23 @@ class _GenerateQrCodeState extends State<GenerateQrCode> {
           items: [
             DropdownMenuItem(
               value: QrErrorCorrectLevel.L,
-              child: Text('Low (L)'),
+              child: Text('Low (L) - ~7% recovery'),
             ),
             DropdownMenuItem(
               value: QrErrorCorrectLevel.M,
-              child: Text('Medium (M)'),
+              child: Text('Medium (M) - ~15% recovery'),
             ),
             DropdownMenuItem(
               value: QrErrorCorrectLevel.Q,
-              child: Text('Quartile (Q)'),
+              child: Text('Quartile (Q) - ~25% recovery'),
             ),
             DropdownMenuItem(
               value: QrErrorCorrectLevel.H,
-              child: Text('High (H)'),
+              child: Text('High (H) - ~30% recovery'),
             ),
           ],
-          onChanged: (value) =>
-              setState(() => _errorCorrectionLevel = value ?? QrErrorCorrectLevel.L),
+          onChanged: (value) => setState(
+              () => _errorCorrectionLevel = value ?? QrErrorCorrectLevel.L),
         ),
       ],
     );
@@ -356,6 +456,7 @@ class _GenerateQrCodeState extends State<GenerateQrCode> {
             min: min,
             max: max,
             divisions: 20,
+            label: value.toStringAsFixed(1),
             onChanged: onChanged,
           ),
         ],
@@ -375,11 +476,15 @@ class _GenerateQrCodeState extends State<GenerateQrCode> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label),
-          DropdownButton<int>(
+          DropdownButtonFormField<int>(
             value: value,
             items: items,
             onChanged: onChanged,
             isExpanded: true,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
           ),
         ],
       ),
@@ -393,62 +498,47 @@ class _GenerateQrCodeState extends State<GenerateQrCode> {
   }) {
     return Column(
       children: [
-        Text(label, style: TextStyle(fontSize: 16)),
+        Text(label),
         const SizedBox(height: 8),
-        ColorPickerButton(
-          initialColor: color,
-          onColorChanged: onColorChanged,
-        ),
-      ],
-    );
-  }
-}
-
-class ColorPickerButton extends StatelessWidget {
-  final Color initialColor;
-  final Function(Color) onColorChanged;
-
-  const ColorPickerButton({
-    required this.initialColor,
-    required this.onColorChanged,
-    super.key,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ElevatedButton(
-      style: ElevatedButton.styleFrom(
-        padding: const EdgeInsets.all(8),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-      onPressed: () => showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Pick a color'),
-          content: SingleChildScrollView(
-            child: BlockPicker(
-              pickerColor: initialColor,
-              onColorChanged: onColorChanged,
+        InkWell(
+          onTap: () => showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text('Pick $label'),
+              content: SingleChildScrollView(
+                child: ColorPicker(
+                  pickerColor: color,
+                  onColorChanged: onColorChanged,
+                  showLabel: true,
+                  pickerAreaHeightPercent: 0.8,
+                  hexInputBar: true,
+                  enableAlpha: false,
+                  displayThumbColor: true,
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Select'),
+                ),
+              ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      ),
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: initialColor,
           borderRadius: BorderRadius.circular(8),
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: Theme.of(context).dividerColor,
+                width: 1,
+              ),
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 }

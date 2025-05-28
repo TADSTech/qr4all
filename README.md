@@ -39,7 +39,7 @@ QR4All is a powerful and easy-to-use **Flutter application** designed for genera
 ### 📌 Steps
 1. **Clone the repository:**
    ```sh
-   git clone https://github.com/Technolenz/qr4all.git
+   git clone https://github.com/TADSTech/qr4all.git
    cd qr4all
    ```
 2. **Install dependencies:**
@@ -117,8 +117,8 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
 
 ## 📬 Contact
 For questions, feedback, or contributions, reach out via:
-- **Email:** technolenz@gmail.com
-- **GitHub:** [Technolenz](https://github.com/Technolenz)
+- **Email:** motrenewed@gmail.com
+- **GitHub:** [T.A.D.S Technologies](https://github.com/TADSTech)
 
 Enjoy generating and scanning QR codes with **QR4All!** 🚀
 

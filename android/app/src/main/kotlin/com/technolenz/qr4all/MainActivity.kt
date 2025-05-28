@@ -1,4 +1,4 @@
-package com.technolenz.qr4all
+package com.tadstech.qr4all
 
 import io.flutter.embedding.android.FlutterActivity
 
