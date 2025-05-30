@@ -1,13 +1,11 @@
 {
-  "hosting": [
-    {
-      "site": "qr4all",
-      "public": "build/web",
-      "ignore": [
-        "firebase.json",
-        "**/.*",
-        "**/node_modules/**"
-      ]
-    }
-  ]
+  "hosting": {
+    "site": "flutterqr4all",
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  }
 }

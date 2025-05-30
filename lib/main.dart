@@ -1,14 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:qr4all/qr_data_handler.dart';
+import 'package:qr4all/theme/theme_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import 'generate_qr_code.dart';
 import 'scan_qr_code.dart';
+import 'theme/theme_settings_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SharedPreferences.getInstance();
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (context) => ThemeProvider()..loadThemePrefs(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -16,17 +25,25 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    QRDataHandler.navigatorKey = GlobalKey<NavigatorState>();
+
     return MaterialApp(
       title: 'QR4All',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.deepPurple,
-          brightness: Brightness.light,
-        ),
+      theme: FlexColorScheme.light(
+        scheme: FlexScheme
+            .values[themeProvider.themeIndex % FlexScheme.values.length],
         useMaterial3: true,
-      ),
+      ).toTheme,
+      darkTheme: FlexColorScheme.dark(
+        scheme: FlexScheme
+            .values[themeProvider.themeIndex % FlexScheme.values.length],
+        useMaterial3: true,
+      ).toTheme,
+      themeMode: themeProvider.themeMode,
       home: const HomePage(),
+      navigatorKey: QRDataHandler.navigatorKey,
     );
   }
 }
@@ -69,12 +86,21 @@ class _HomePageState extends State<HomePage> {
         centerTitle: true,
         backgroundColor: Theme.of(context).colorScheme.primary,
         elevation: 10,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () => showDialog(
+              context: context,
+              builder: (context) => const ThemeSettingsDialog(),
+            ),
+          ),
+        ],
       ),
       body: Center(
         child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1200),
-            child:
-                isLargeScreen ? _buildDesktopLayout() : _buildMobileLayout()),
+          constraints: const BoxConstraints(maxWidth: 1200),
+          child: isLargeScreen ? _buildDesktopLayout() : _buildMobileLayout(),
+        ),
       ),
     );
   }
@@ -201,7 +227,7 @@ class _HomePageState extends State<HomePage> {
           Container(
             height: isLargeScreen ? 300 : 200,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(10),
               boxShadow: [
                 BoxShadow(

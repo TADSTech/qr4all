@@ -1,124 +1,90 @@
 # QR4All - QR Code Generator & Scanner
 
-QR4All is a powerful and easy-to-use **Flutter application** designed for generating and scanning QR codes across **mobile and web platforms**. With support for multiple data types, advanced customization options, and seamless sharing capabilities, QR4All is your go-to solution for all QR code needs.
+QR4All is a powerful cross-platform **Flutter application** for generating and scanning QR codes with support for **mobile (Android/iOS) and web**. Featuring advanced customization, multiple data types, and seamless sharing capabilities.
 
 ## 🚀 Features
 
 ### 🔹 QR Code Generation
-- **Supports Multiple Data Types:**
-  - Plain Text
-  - URLs (auto-adds `https://` if missing)
-  - Email addresses (`mailto:` format)
-  - Phone numbers (`tel:` format)
-- **Customization Options:**
-  - Choose QR code color
-  - Set background color
-  - Adjust quiet zone (padding)
-  - Select error correction level (L, M, Q, H)
-- **Share & Download:**
-  - Share QR codes via social media and messaging apps
-  - Download QR codes as high-quality PNG images
+- **10+ Supported Data Types:**
+  - Text, URLs, Email, Phone, SMS
+  - WiFi, Contact, Location, Event, Cryptocurrency
+- **Advanced Customization:**
+  - Custom QR and background colors
+  - Adjustable quiet zone and error correction
+  - Toggle app-specific tagging
+- **Export Options:**
+  - Share via native sharing
+  - Download as PNG (mobile/web)
 
 ### 🔹 QR Code Scanning
-- **Camera Scanning:** Scan QR codes using your device's camera
-- **Image Upload:** Upload an image to scan QR codes (available on web & mobile)
-- **Copy to Clipboard:** Quickly copy scanned results for easy use
+- **Real-time Camera Scanning**
+- **Image Upload Support**
+- **Smart QR Tag Handling** (QR4ALL:type:data format)
+- **Action Execution** (open URLs, send SMS, etc.)
+- **Scan History** with copy/delete functionality
+
+### 🔹 Cross-Platform
+- **Mobile:** Android & iOS
+- **Web:** Full PWA support
+- **Responsive UI** for all screen sizes
+
+## 🎨 New in v2.0
+- **Theming System** with 36+ color schemes
+- **Dark/Light Mode** with system adaptation
+- **Enhanced UI/UX** with Material 3 design
+- **Improved Performance** for web and mobile
+- **Better Error Handling** and user feedback
 
 ## 📸 Screenshots
 
-| Generate QR Code | Scan QR Code |
-|-----------------|--------------|
-| ![Generate QR](screenshots/generate_qr.png) | ![Scan QR](screenshots/scan_qr.png) |
+| Generate QR Code | Scan QR Code | Theme Settings |
+|-----------------|--------------|----------------|
+| ![Generate](screenshots/generate.png) | ![Scan](screenshots/scan.png) | ![Theme](screenshots/theme.png) |
 
-## 🛠 Installation
+## 🛠 Installation & Development
 
-### 📌 Prerequisites
-- **Flutter SDK** (v3.0.0 or higher)
-- **Dart SDK** (v2.17.0 or higher)
+### Prerequisites
+- Flutter 3.10+
+- Dart 2.18+
+- Android Studio/Xcode (for mobile builds)
 
-### 📌 Steps
-1. **Clone the repository:**
-   ```sh
-   git clone https://github.com/TADSTech/qr4all.git
-   cd qr4all
-   ```
-2. **Install dependencies:**
-   ```sh
-   flutter pub get
-   ```
-3. **Run the app:**
-   ```sh
-   flutter run
-   ```
-4. **Build for web:**
-   ```sh
-   flutter build web
-   ```
-
-## 🎯 Usage
-
-### ➤ **Generate QR Code**
-1. Select the data type (Text, URL, Email, Phone)
-2. Enter the data in the input field
-3. Customize the QR code (colors, padding, error correction)
-4. Generate the QR code
-5. Share or download the QR code
-
-### ➤ **Scan QR Code**
-1. Open the scanner
-2. Use the camera to scan a QR code or upload an image
-3. View the scanned result and copy it to the clipboard
-
-## 📦 Dependencies
-QR4All uses the following Flutter packages:
-- `qr_flutter` → For generating QR codes
-- `mobile_scanner` → For scanning QR codes
-- `share_plus` → For sharing QR codes
-- `flutter_colorpicker` → For color customization
-- `http` → For web API calls (image scanning)
-
-## 📁 Folder Structure
 ```sh
-QR4All/
-├── lib/
-│   ├── generate_qr_code.dart       # QR code generation screen
-│   ├── scan_qr_code.dart           # QR code scanning screen
-│   ├── main.dart                   # Entry point
-├── assets/                         # Static assets (images, fonts)
-├── screenshots/                    # App screenshots
-└── README.md                       # Project documentation
+# Clone repository
+git clone https://github.com/TADSTech/qr4all.git
+cd qr4all
+
+# Install dependencies
+flutter pub get
+
+# Run development version
+flutter run -d chrome  # For web
+flutter run            # For connected device
 ```
 
-## 🤝 Contributing
-Contributions are always welcome! Follow these steps to contribute:
+## 📦 Key Dependencies
+- `flex_color_scheme` - Advanced theming
+- `mobile_scanner` - Camera scanning
+- `qr_flutter` - QR generation
+- `share_plus` - Cross-platform sharing
+- `provider` - State management
+- `url_launcher` - Opening URLs/SMS
 
-1. **Fork the repository**
-2. **Create a new branch:**
-   ```sh
-   git checkout -b feature/your-feature
-   ```
-3. **Commit your changes:**
-   ```sh
-   git commit -m "Add your feature"
-   ```
-4. **Push to the branch:**
-   ```sh
-   git push origin feature/your-feature
-   ```
-5. **Open a pull request** on GitHub
+## 🌟 Upcoming Features
+- [ ] QR code history export
+- [ ] Batch QR generation
+- [ ] Custom logo overlay
+- [ ] Enhanced web camera support
+
+## 🤝 Contributing
+We welcome contributions! Please follow our guidelines:
+1. Fork the repository
+2. Create a feature branch
+3. Submit a pull request
 
 ## 📜 License
-This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
+MIT License - See [LICENSE](LICENSE) for details.
 
-## 💙 Acknowledgments
-- **Flutter Team** → For the amazing framework
-- **Pub.dev** → For providing awesome packages
-- **You** → For using and supporting QR4All! 😊
-
-## 📬 Contact
-For questions, feedback, or contributions, reach out via:
-- **Email:** motrenewed@gmail.com
-- **GitHub:** [T.A.D.S Technologies](https://github.com/TADSTech)
-
-Enjoy generating and scanning QR codes with **QR4All!** 🚀
-
+## 💌 Contact
+For support or questions:
+- Email: motrenewed@gmail.com
+- GitHub: [TADSTech](https://github.com/TADSTech)

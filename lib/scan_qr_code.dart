@@ -1,3 +1,4 @@
+// scan_qr_code.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -9,14 +10,13 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:camera/camera.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:qr4all/qr_data_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:image_picker/image_picker.dart';
 import 'package:qr4all/platform_utils.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:android_intent_plus/android_intent.dart';
-import 'package:android_intent_plus/flag.dart';
 
 class ScanQrCode extends StatefulWidget {
   const ScanQrCode({super.key});
@@ -27,12 +27,16 @@ class ScanQrCode extends StatefulWidget {
 
 class _ScanQrCodeState extends State<ScanQrCode> {
   String qrResult = 'Scan result will appear here';
-  MobileScannerController? cameraController;
+  MobileScannerController cameraController = MobileScannerController(
+    torchEnabled: false,
+    formats: [BarcodeFormat.qrCode],
+    returnImage: false,
+  );
   bool isScanning = false;
   bool _isTorchOn = false;
   bool _isProcessing = false;
   String _scanStatus = 'Initializing...';
-  bool _continuousScan = false;
+  bool _continuousScan = true;
   bool _beepOnScan = true;
   bool _hasCamera = false;
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -43,21 +47,36 @@ class _ScanQrCodeState extends State<ScanQrCode> {
     super.initState();
     _initializeScanner();
     _loadSound();
+    _requestInitialPermissions();
+  }
+
+  Future<void> _requestInitialPermissions() async {
+    if (!kIsWeb) {
+      final granted = await PlatformUtils.requestCameraPermission();
+      if (!granted) {
+        setState(() {
+          _scanStatus = 'Camera permission denied. Cannot scan.';
+        });
+        _showPermissionDeniedDialog('camera');
+      }
+    }
   }
 
   Future<void> _initializeScanner() async {
     try {
-      // Check for camera availability
       _hasCamera = await _checkCameraAvailability();
 
       if (_hasCamera) {
-        cameraController = MobileScannerController();
-        setState(() => _scanStatus = 'Ready to scan');
+        _updateState(() => _scanStatus = 'Ready to scan');
+        _updateState(() {
+          isScanning = true;
+        });
+        cameraController.start();
       } else {
-        setState(() => _scanStatus = 'No camera detected');
+        _updateState(() => _scanStatus = 'No camera detected');
       }
     } catch (e) {
-      setState(() => _scanStatus = 'Camera initialization failed');
+      _updateState(() => _scanStatus = 'Camera initialization failed');
       debugPrint('Camera init error: $e');
     }
   }
@@ -85,9 +104,15 @@ class _ScanQrCodeState extends State<ScanQrCode> {
   @override
   void dispose() {
     _scanCooldownTimer?.cancel();
-    cameraController?.dispose();
+    cameraController.dispose();
     _audioPlayer.dispose();
     super.dispose();
+  }
+
+  void _updateState(VoidCallback callback) {
+    if (mounted) {
+      setState(callback);
+    }
   }
 
   Future<void> _saveScan(String result) async {
@@ -122,7 +147,7 @@ class _ScanQrCodeState extends State<ScanQrCode> {
       return;
     }
 
-    setState(() {
+    _updateState(() {
       qrResult = code;
       _scanStatus = 'Scan successful!';
     });
@@ -135,9 +160,9 @@ class _ScanQrCodeState extends State<ScanQrCode> {
     }
 
     if (!_continuousScan) {
-      setState(() {
+      _updateState(() {
         isScanning = false;
-        cameraController?.stop();
+        cameraController.stop();
       });
     } else {
       _scanCooldownTimer?.cancel();
@@ -148,123 +173,22 @@ class _ScanQrCodeState extends State<ScanQrCode> {
   }
 
   Future<void> _handleTaggedAction(String code) async {
-    // Check for QR4ALL tagged content
     if (code.startsWith('QR4ALL:')) {
       final parts = code.split(':');
       if (parts.length >= 3) {
         final type = parts[1];
         final data = parts.sublist(2).join(':');
 
-        switch (type) {
-          case 'URL':
-            await _launchUrl(data);
-            break;
-          case 'Email':
-            await _launchUrl('mailto:$data');
-            break;
-          case 'Phone':
-            await _launchUrl('tel:$data');
-            break;
-          case 'SMS':
-            await _launchSms(data);
-            break;
-          case 'Contact':
-            if (Platform.isAndroid) {
-              await _addContact(data);
-            } else {
-              await _launchUrl('https://example.com/contact?vcf=$data');
-            }
-            break;
-          case 'Location':
-            await _launchUrl('geo:$data');
-            break;
-          case 'WiFi':
-            if (Platform.isAndroid) {
-              await _connectToWifi(data);
-            }
-            break;
-          default:
-            // No special handling for other types
-            break;
+        final qrType = QRDataHandler.getTypeByName(type);
+        if (qrType != null && qrType.hasAction) {
+          await qrType.action!(context, data);
+          return;
         }
       }
-    } else {
-      // Handle standard QR codes
-      if (Uri.tryParse(code)?.hasAbsolutePath ?? false) {
-        await _launchUrl(code);
-      }
     }
-  }
 
-  Future<void> _launchUrl(String url) async {
-    try {
-      if (await canLaunchUrl(Uri.parse(url))) {
-        await launchUrl(Uri.parse(url));
-      }
-    } catch (e) {
-      debugPrint('Error launching URL: $e');
-    }
-  }
-
-  Future<void> _launchSms(String phone) async {
-    try {
-      if (Platform.isAndroid) {
-        final intent = AndroidIntent(
-          action: 'android.intent.action.SENDTO',
-          data: Uri.encodeFull('sms:$phone'),
-          flags: [Flag.FLAG_ACTIVITY_NEW_TASK],
-        );
-        await intent.launch();
-      } else {
-        await _launchUrl('sms:$phone');
-      }
-    } catch (e) {
-      debugPrint('Error launching SMS: $e');
-    }
-  }
-
-  Future<void> _addContact(String vcfData) async {
-    try {
-      if (Platform.isAndroid) {
-        final intent = AndroidIntent(
-          action: 'android.intent.action.INSERT',
-          type: 'vnd.android.cursor.dir/contact',
-          arguments: {
-            'name': vcfData
-                .split(';')
-                .firstWhere(
-                  (part) => part.startsWith('N='),
-                  orElse: () => 'N=Unknown',
-                )
-                .substring(2),
-          },
-        );
-        await intent.launch();
-      }
-    } catch (e) {
-      debugPrint('Error adding contact: $e');
-    }
-  }
-
-  Future<void> _connectToWifi(String config) async {
-    try {
-      if (Platform.isAndroid) {
-        // This requires additional permissions and setup
-        final parts = config.split(';');
-        final ssid = parts.firstWhere((p) => p.startsWith('S=')).substring(2);
-        final password =
-            parts.firstWhere((p) => p.startsWith('P=')).substring(2);
-
-        final intent = AndroidIntent(
-          action: 'android.settings.WIFI_SETTINGS',
-        );
-        await intent.launch();
-
-        // Note: Actually connecting to WiFi programmatically requires additional permissions
-        // and is more complex on newer Android versions
-      }
-    } catch (e) {
-      debugPrint('Error connecting to WiFi: $e');
+    if (Uri.tryParse(code)?.hasAbsolutePath ?? false) {
+      await QRDataHandler.doLaunchUrl(code);
     }
   }
 
@@ -281,14 +205,14 @@ class _ScanQrCodeState extends State<ScanQrCode> {
     if (_isProcessing) return;
     _isProcessing = true;
 
-    setState(() {
+    _updateState(() {
       _scanStatus = 'Processing image...';
     });
 
     try {
       final Uint8List? imageBytes = await _pickImage();
       if (imageBytes == null) {
-        setState(() {
+        _updateState(() {
           _scanStatus = 'Image selection canceled';
           _isProcessing = false;
         });
@@ -296,7 +220,7 @@ class _ScanQrCodeState extends State<ScanQrCode> {
       }
 
       final result = await _decodeQrFromImage(imageBytes);
-      setState(() {
+      _updateState(() {
         qrResult = result ?? 'No QR code found in image';
         _scanStatus =
             result != null ? 'Decoding successful' : 'No QR code detected';
@@ -310,7 +234,7 @@ class _ScanQrCodeState extends State<ScanQrCode> {
         }
       }
     } catch (e) {
-      setState(() {
+      _updateState(() {
         qrResult = 'Error processing image: ${e.toString()}';
         _scanStatus = 'Decoding failed';
       });
@@ -388,9 +312,32 @@ class _ScanQrCodeState extends State<ScanQrCode> {
     }
   }
 
+  void _showPermissionDeniedDialog(String permission) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Permission Required'),
+        content: Text(
+            'Camera permission is required to scan QR codes. Please enable it in settings.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              PlatformUtils.openAppSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isLargeScreen = MediaQuery.of(context).size.width > 800;
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -398,77 +345,64 @@ class _ScanQrCodeState extends State<ScanQrCode> {
         title: const Text('QR Code Scanner',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 24,
+              fontSize: 20,
               fontWeight: FontWeight.bold,
             )),
         centerTitle: true,
         backgroundColor: theme.colorScheme.primary,
-        elevation: 8,
+        elevation: 4,
         actions: [
-          if (cameraController?.hasTorch ?? false)
+          if (cameraController.hasTorch)
             IconButton(
               icon: Icon(_isTorchOn ? Icons.flash_off : Icons.flash_on),
               onPressed: () {
-                setState(() {
+                _updateState(() {
                   _isTorchOn = !_isTorchOn;
-                  cameraController?.toggleTorch();
+                  cameraController.toggleTorch();
                 });
               },
               tooltip: 'Toggle torch',
             ),
         ],
       ),
-      body: Container(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Expanded(
-              child: isLargeScreen
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildScannerSection(context),
-                        const SizedBox(width: 20),
-                        _buildResultSection(context),
-                      ],
-                    )
-                  : Column(
-                      children: [
-                        _buildScannerSection(context),
-                        const SizedBox(height: 20),
-                        _buildResultSection(context),
-                      ],
-                    ),
-            ),
-            _buildControlButtons(context),
-            const SizedBox(height: 10),
-            _buildStatusIndicator(context),
-          ],
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              _buildScannerSection(context),
+              const SizedBox(height: 16),
+              _buildResultSection(context),
+              const SizedBox(height: 16),
+              _buildControlButtons(context),
+              const SizedBox(height: 8),
+              _buildStatusIndicator(context),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildScannerSection(BuildContext context) {
-    return Expanded(
-      flex: 2,
-      child: Card(
-        elevation: 8,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.4,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: Colors.black,
+        ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           child: Stack(
             children: [
-              if (_hasCamera && isScanning && cameraController != null)
+              if (_hasCamera)
                 MobileScanner(
-                  controller: cameraController!,
+                  controller: cameraController,
                   onDetect: _handleBarcode,
-                  fit: BoxFit.contain,
-                  scanWindow: Rect.fromCenter(
-                    center: const Offset(0.5, 0.5),
-                    width: 0.8,
-                    height: 0.8,
-                  ),
+                  fit: BoxFit.cover,
                 )
               else
                 Container(
@@ -479,20 +413,18 @@ class _ScanQrCodeState extends State<ScanQrCode> {
                       children: [
                         const Icon(Icons.qr_code_scanner,
                             size: 60, color: Colors.white54),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
                         Text(
                           _hasCamera
                               ? 'Camera preview inactive'
                               : 'No camera available',
-                          style: TextStyle(
+                          style: const TextStyle(
                             color: Colors.white,
-                            fontSize: MediaQuery.of(context).size.width > 600
-                                ? 24
-                                : 18,
+                            fontSize: 18,
                           ),
                         ),
                         if (!_hasCamera) ...[
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
                           ElevatedButton(
                             onPressed: _handleImageUpload,
                             child: const Text('Upload Image Instead'),
@@ -515,11 +447,11 @@ class _ScanQrCodeState extends State<ScanQrCode> {
                         color: Colors.black.withOpacity(0.6),
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Text(
+                      child: const Text(
                         'Align QR code within frame',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 16,
+                          fontSize: 14,
                         ),
                       ),
                     ),
@@ -534,58 +466,60 @@ class _ScanQrCodeState extends State<ScanQrCode> {
 
   Widget _buildResultSection(BuildContext context) {
     final theme = Theme.of(context);
-    final isLargeScreen = MediaQuery.of(context).size.width > 800;
 
-    return Expanded(
-      flex: 4,
-      child: Card(
-        elevation: 8,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Scan Result',
-                    style: TextStyle(
-                      fontSize: isLargeScreen ? 28 : 22,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary,
-                    ),
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Scan Result',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.copy),
-                    onPressed: _copyToClipboard,
-                    tooltip: 'Copy to clipboard',
-                  ),
-                ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.copy),
+                  onPressed: _copyToClipboard,
+                  tooltip: 'Copy to clipboard',
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(12),
               ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: SingleChildScrollView(
-                    child: SelectableText(
-                      qrResult,
-                      style: TextStyle(
-                        fontSize: isLargeScreen ? 18 : 16,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                    ),
+              constraints: BoxConstraints(
+                minHeight: 100,
+                maxHeight: MediaQuery.of(context).size.height * 0.2,
+              ),
+              child: SingleChildScrollView(
+                child: SelectableText(
+                  qrResult,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: theme.colorScheme.onSurface,
                   ),
                 ),
               ),
-              if (qrResult.startsWith('QR4ALL:'))
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
+            ),
+            if (qrResult.startsWith('QR4ALL:'))
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: SizedBox(
+                  width: double.infinity,
                   child: ElevatedButton(
                     onPressed: () => _handleTaggedAction(qrResult),
                     child: Text(
@@ -596,67 +530,61 @@ class _ScanQrCodeState extends State<ScanQrCode> {
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: theme.colorScheme.primary,
-                      minimumSize: const Size(double.infinity, 48),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
                   ),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );
   }
 
   Widget _buildControlButtons(BuildContext context) {
-    final isLargeScreen = MediaQuery.of(context).size.width > 800;
-    final buttonSpacing = isLargeScreen ? 40.0 : 20.0;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Column(
-        children: [
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: buttonSpacing,
-            runSpacing: 10,
-            children: [
-              if (_hasCamera)
-                _buildActionButton(
-                  icon: isScanning ? Icons.stop : Icons.camera_alt,
-                  label: isScanning ? 'Stop' : 'Scan',
-                  onPressed: () {
-                    setState(() {
-                      isScanning = !isScanning;
-                      if (!isScanning) {
-                        cameraController?.stop();
-                      } else {
-                        _scanStatus = 'Scanning...';
-                      }
-                    });
-                  },
-                ),
+    return Column(
+      children: [
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 16,
+          runSpacing: 12,
+          children: [
+            if (_hasCamera)
               _buildActionButton(
-                icon: Icons.upload,
-                label: 'Upload Image',
-                onPressed: _handleImageUpload,
+                icon: isScanning ? Icons.stop : Icons.camera_alt,
+                label: isScanning ? 'Stop' : 'Scan',
+                onPressed: () {
+                  _updateState(() {
+                    isScanning = !isScanning;
+                    if (!isScanning) {
+                      cameraController.stop();
+                    } else {
+                      _scanStatus = 'Scanning...';
+                    }
+                  });
+                },
               ),
-              if (cameraController?.hasTorch ?? false)
-                _buildActionButton(
-                  icon: _isTorchOn ? Icons.flash_off : Icons.flash_on,
-                  label: _isTorchOn ? 'Torch Off' : 'Torch On',
-                  onPressed: () {
-                    setState(() {
-                      _isTorchOn = !_isTorchOn;
-                      cameraController?.toggleTorch();
-                    });
-                  },
-                ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _buildOptionsButton(),
-        ],
-      ),
+            _buildActionButton(
+              icon: Icons.upload,
+              label: 'Upload Image',
+              onPressed: _handleImageUpload,
+            ),
+            if (cameraController.hasTorch)
+              _buildActionButton(
+                icon: _isTorchOn ? Icons.flash_off : Icons.flash_on,
+                label: _isTorchOn ? 'Torch Off' : 'Torch On',
+                onPressed: () {
+                  _updateState(() {
+                    _isTorchOn = !_isTorchOn;
+                    cameraController.toggleTorch();
+                  });
+                },
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _buildOptionsButton(),
+      ],
     );
   }
 
@@ -666,15 +594,15 @@ class _ScanQrCodeState extends State<ScanQrCode> {
     required VoidCallback onPressed,
   }) {
     return SizedBox(
-      width: 100,
+      width: 90,
       child: Column(
         children: [
           IconButton(
-            icon: Icon(icon, size: 32),
+            icon: Icon(icon, size: 28),
             onPressed: onPressed,
             style: IconButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
             ),
           ),
           const SizedBox(height: 4),
@@ -682,7 +610,7 @@ class _ScanQrCodeState extends State<ScanQrCode> {
             label,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 12,
               color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
@@ -693,7 +621,7 @@ class _ScanQrCodeState extends State<ScanQrCode> {
 
   Widget _buildOptionsButton() {
     return TextButton.icon(
-      icon: const Icon(Icons.settings),
+      icon: const Icon(Icons.settings, size: 20),
       label: const Text('Scan Options'),
       onPressed: _showScanOptions,
       style: TextButton.styleFrom(
@@ -714,6 +642,7 @@ class _ScanQrCodeState extends State<ScanQrCode> {
                   ? Colors.green
                   : Theme.of(context).colorScheme.onSurface,
           fontWeight: FontWeight.w500,
+          fontSize: 14,
         ),
       ),
     );
@@ -731,7 +660,7 @@ class _ScanQrCodeState extends State<ScanQrCode> {
               title: const Text('Continuous Scan'),
               value: _continuousScan,
               onChanged: (value) {
-                setState(() {
+                _updateState(() {
                   _continuousScan = value;
                 });
                 Navigator.pop(context);
@@ -741,7 +670,7 @@ class _ScanQrCodeState extends State<ScanQrCode> {
               title: const Text('Beep on Scan'),
               value: _beepOnScan,
               onChanged: (value) {
-                setState(() {
+                _updateState(() {
                   _beepOnScan = value;
                 });
                 Navigator.pop(context);
